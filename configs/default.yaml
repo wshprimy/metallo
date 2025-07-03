@@ -1,0 +1,64 @@
+eval_only: false
+
+model:
+  name: "toynet"
+  mode: "spectral"  # Simple spectral-only mode for default
+  num_classes: 1
+  task_type: "regression"
+  
+  # Spectral-related parameters
+  spectral_input_dim: 10  # Default smaller size
+  spectral_hidden_dim: 128
+  spectral_num_layers: 2
+  
+  # Common parameters
+  dropout: 0.1
+
+data:
+  dataset: "metallo"
+  mode: "spectral"  # Simple spectral-only mode for default
+  
+  # Spectral data
+  spectral_csv_path: "./data/sample_spectral.csv"
+  spectral_columns:
+    - "wavelength_400"
+    - "wavelength_421"
+    - "wavelength_442"
+    - "wavelength_463"
+    - "wavelength_484"
+    - "wavelength_505"
+    - "wavelength_526"
+    - "wavelength_547"
+    - "wavelength_568"
+    - "wavelength_589"
+  labels_csv_path: "./data/sample_spectral_labels.csv"
+  label_column: "target"
+  
+  # Data processing
+  split_ratios: [0.8, 0.1, 0.1]
+  scale_spectral: true
+
+training:
+  seed: 42
+  dataloader_num_workers: 2
+  output_dir: "./output"
+  learning_rate: !!float 1.0e-3
+  warmup_steps: 50
+  weight_decay: 0.01
+  num_train_epochs: 5
+  per_device_train_batch_size: 32
+  per_device_eval_batch_size: 64
+  eval_accumulation_steps: 4
+  save_total_limit: 2
+  report_to: []  # No wandb by default
+  logging_strategy: "steps"
+  logging_steps: 25
+  eval_strategy: "steps"
+  eval_steps: 100
+  save_steps: 100
+
+wandb:
+  project: "metallo"
+  entity: null
+  name: ""
+  tags: ["default", "spectral"]

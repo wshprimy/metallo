@@ -1,0 +1,77 @@
+eval_only: false
+
+model:
+  name: "toynet"
+  mode: "multimodal"  # "image", "spectral", "multimodal"
+  num_classes: 1  # For regression tasks
+  task_type: "regression"  # "regression" or "classification"
+  
+  # Image-related parameters
+  image_backbone: "resnet18"  # "resnet18", "resnet50"
+  image_feature_dim: 512
+  
+  # Spectral-related parameters
+  spectral_input_dim: 100  # Will be updated based on actual data
+  spectral_hidden_dim: 256
+  spectral_num_layers: 2
+  
+  # Fusion parameters (for multimodal)
+  fusion_hidden_dim: 256
+  fusion_num_layers: 2
+  
+  # Common parameters
+  dropout: 0.2
+
+data:
+  dataset: "metallo"
+  mode: "multimodal"  # "image", "spectral", "multimodal"
+  
+  # Image data
+  image_dir: "./data/images"  # Directory containing metallographic images
+  
+  # Spectral data
+  spectral_csv_path: "./data/spectral_data.csv"  # CSV file with spectral data
+  spectral_columns:  # List of spectral feature columns (example)
+    - "wavelength_400"
+    - "wavelength_450"
+    - "wavelength_500"
+    - "wavelength_550"
+    - "wavelength_600"
+    - "wavelength_650"
+    - "wavelength_700"
+    - "wavelength_750"
+    - "wavelength_800"
+    - "wavelength_850"
+  
+  # Labels
+  labels_csv_path: "./data/labels.csv"  # CSV file with labels
+  label_column: "target"  # Name of the target column
+  
+  # Data processing
+  split_ratios: [0.8, 0.1, 0.1]
+  scale_spectral: true
+
+training:
+  seed: 42
+  dataloader_num_workers: 4
+  output_dir: "./output"
+  learning_rate: !!float 1.0e-4
+  warmup_steps: 100
+  weight_decay: 0.01
+  num_train_epochs: 10
+  per_device_train_batch_size: 16
+  per_device_eval_batch_size: 32
+  eval_accumulation_steps: 8
+  save_total_limit: 3
+  report_to: ["wandb"]
+  logging_strategy: "steps"
+  logging_steps: 50
+  eval_strategy: "steps"
+  eval_steps: 200
+  save_steps: 200
+
+wandb:
+  project: "metallo"
+  entity: null
+  name: ""
+  tags: ["metallographic", "spectral", "multimodal"]
