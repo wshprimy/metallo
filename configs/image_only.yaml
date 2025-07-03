@@ -2,13 +2,10 @@ eval_only: false
 
 model:
   name: "toynet"
-  mode: "multimodal"  # "image", "spectral", "multimodal"
+  mode: "image"  # Image-only mode
   
   # Image-related parameters
-  image_backbone: "resnet18"  # "resnet18", "resnet50"
-  
-  # Spectral-related parameters
-  spectral_input_dim: 100  # Length of each spectral segment
+  image_backbone: "resnet18"
   
   # Model architecture parameters
   hidden_dim: 256
@@ -17,28 +14,26 @@ model:
 
 data:
   dataset: "metallo"
-  mode: "multimodal"  # "image", "spectral", "multimodal"
+  mode: "image"  # Image-only mode
   
   # Data directory containing DOS folders
-  data_dir: ".dataset"  # Directory with DOS folders (e.g., 5.844339467/)
+  data_dir: ".dataset"
   
   # Data processing parameters
   split_ratios: [0.8, 0.1, 0.1]  # train, val, test
   images_per_dos: 30  # Number of images to use per DOS value
-  spectral_length: 100  # Length of each spectral segment
   preprocess_images: false  # Whether to apply image preprocessing
-  normalize_spectral: true  # Whether to normalize spectral data
 
 training:
   seed: 42
   dataloader_num_workers: 4
-  output_dir: "./output"
+  output_dir: "./output/image_only"
   learning_rate: !!float 1.0e-4
   warmup_steps: 100
   weight_decay: 0.01
   num_train_epochs: 10
-  per_device_train_batch_size: 4  # Reduced for memory efficiency
-  per_device_eval_batch_size: 8
+  per_device_train_batch_size: 8
+  per_device_eval_batch_size: 16
   eval_accumulation_steps: 8
   save_total_limit: 3
   report_to: ["wandb"]
@@ -55,5 +50,5 @@ training:
 wandb:
   project: "metallo-dos-prediction"
   entity: null
-  name: ""
-  tags: ["metallographic", "spectral", "multimodal", "dos-prediction"]
+  name: "image-only-experiment"
+  tags: ["metallographic", "image-only", "dos-prediction"]
