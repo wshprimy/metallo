@@ -7,7 +7,7 @@ from typing import Optional, List, Tuple
 import logging
 
 
-class SpectralDataset(Dataset):
+class Spectral(Dataset):
     """
     Dataset for spectral data (LIBS).
     Each DOS folder contains a CSV file with spectral measurements.
@@ -73,7 +73,9 @@ class SpectralDataset(Dataset):
 
                 # Load spectral data
                 df = pd.read_csv(csv_path, header=None)
-                spectral_array = df.values.flatten().astype(np.float32)
+                # Transpose the data since each column is a spectrum with 1600 dimensions
+                spectral_matrix = df.values.T.astype(np.float32)  # Shape: (num_spectra, 1600)
+                spectral_array = spectral_matrix.flatten()  # Flatten for compatibility
 
                 self.dos_values.append(dos_value)
                 self.spectral_data.append(spectral_array)
@@ -108,7 +110,7 @@ class SpectralDataset(Dataset):
             self.segments_per_split = 0
 
         logging.info(
-            f"SpectralDataset: {len(self.dos_values)} DOS values, "
+            f"Spectral: {len(self.dos_values)} DOS values, "
             f"{self.segments_per_split} segments per DOS, "
             f"spectral length: {self.spectral_length}, "
             f"total samples: {len(self)}"

@@ -1,12 +1,9 @@
-from .metallographic_dataset import MetallographicDataset
-from .spectral_dataset import SpectralDataset
-from .unified_dataset import UnifiedMetalloDataset
-from .metallo_dataset import MetalloDataset, create_datasets
+from .metallographic import Metallographic
+from .spectral import Spectral
+from .unimetallo import UnimetalloDataset
 
 __all__ = [
-    "MetallographicDataset",
-    "SpectralDataset",
-    "UnifiedMetalloDataset",
-    "MetalloDataset",
-    "create_datasets",
+    "Metallographic",
+    "Spectral",
+    "UnimetalloDataset",
 ]

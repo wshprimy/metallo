@@ -5,9 +5,64 @@ from PIL import Image
 import torchvision.transforms as transforms
 from typing import Optional, List, Tuple
 import logging
+import cv2
+import numpy as np
+from matplotlib import pyplot as plt
 
 
-class MetallographicDataset(Dataset):
+def process(image_path, thres=110, cover=500, color=(135, 135, 135), fill_mode="fix"):
+    """
+    Process metallographic images with preprocessing.
+    
+    Args:
+        image_path: Path to the image file
+        thres: Threshold value (default 110)
+        cover: Cover value (default 500)
+        color: RGB color tuple (default (135, 135, 135))
+        fill_mode: Fill mode - "fix" or "adaptive" (default "fix")
+    
+    Returns:
+        Processed image as numpy array
+    """
+    img = plt.imread(image_path)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    
+    mask = img.copy()
+    mask = cv2.medianBlur(mask, 3)
+    
+    mask = [135.0, 135.0, 135.0] - mask
+    
+    return np.float32(mask)
+
+
+def transform(image, image_transform=None):
+    """
+    Apply transformations to the image.
+    
+    Args:
+        image: PIL Image or numpy array
+        image_transform: Optional transform to apply
+    
+    Returns:
+        Transformed image tensor
+    """
+    if image_transform is None:
+        image_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Resize(336),
+            transforms.CenterCrop(300),
+        ])
+    
+    if isinstance(image, np.ndarray):
+        # Convert numpy array to PIL Image
+        if image.dtype == np.float32:
+            image = (image * 255).astype(np.uint8)
+        image = Image.fromarray(image)
+    
+    return image_transform(image)
+
+
+class Metallographic(Dataset):
     """
     Dataset for metallographic images.
     Each DOS folder contains multiple .tif images.
@@ -22,7 +77,7 @@ class MetallographicDataset(Dataset):
         train_ratio: float = 0.8,
         val_ratio: float = 0.1,
         images_per_dos: int = 100,
-        preprocess: bool = False,
+        process_images: bool = False,
     ):
         """
         Initialize metallographic dataset.
@@ -35,7 +90,7 @@ class MetallographicDataset(Dataset):
             train_ratio: Ratio for training split
             val_ratio: Ratio for validation split
             images_per_dos: Number of images per DOS value (default 100)
-            preprocess: Whether to apply preprocessing
+            process_images: Whether to apply preprocessing (default False)
         """
         self.data_dir = data_dir
         self.is_train = is_train
@@ -43,7 +98,7 @@ class MetallographicDataset(Dataset):
         self.train_ratio = train_ratio
         self.val_ratio = val_ratio
         self.images_per_dos = images_per_dos
-        self.preprocess = preprocess
+        self.process_images = process_images
 
         # Get DOS folders and sort them
         self.dos_folders = sorted(
@@ -94,7 +149,7 @@ class MetallographicDataset(Dataset):
         self.images_per_split = self.end_idx - self.start_idx
 
         logging.info(
-            f"MetallographicDataset: {len(self.dos_values)} DOS values, "
+            f"Metallographic: {len(self.dos_values)} DOS values, "
             f"{self.images_per_split} images per DOS, "
             f"total samples: {len(self)}"
         )
@@ -136,17 +191,11 @@ class MetallographicDataset(Dataset):
         image_path = os.path.join(dos_path, image_files[img_idx])
 
         # Load and transform image
-        if self.preprocess:
-            # Import preprocess function if needed
-            try:
-                from preprocess import preprocess
-
-                image = preprocess(image_path, fill_mode="adaptive")
-            except ImportError:
-                image = Image.open(image_path).convert("RGB")
+        if self.process_images:
+            image = process(image_path, fill_mode="adaptive")
+            image_tensor = transform(image, self.image_transform)
         else:
             image = Image.open(image_path).convert("RGB")
-
-        image_tensor = self.image_transform(image)
+            image_tensor = self.image_transform(image)
 
         return image_tensor, dos_value

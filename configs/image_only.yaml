@@ -2,7 +2,7 @@ eval_only: false
 
 model:
   name: "toynet"
-  mode: "image"  # Image-only mode
+  mode: "metallographic"  # Metallographic-only mode
   
   # Image-related parameters
   image_backbone: "resnet18"
@@ -14,7 +14,7 @@ model:
 
 data:
   dataset: "metallo"
-  mode: "image"  # Image-only mode
+  mode: "metallographic"  # Metallographic-only mode
   
   # Data directory containing DOS folders
   data_dir: ".dataset"

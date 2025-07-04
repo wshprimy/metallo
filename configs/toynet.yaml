@@ -2,7 +2,7 @@ eval_only: false
 
 model:
   name: "toynet"
-  mode: "multimodal"  # "image", "spectral", "multimodal"
+  mode: "unified"  # "metallographic", "spectral", "unified"
   
   # Image-related parameters
   image_backbone: "resnet18"  # "resnet18", "resnet50"
@@ -17,7 +17,7 @@ model:
 
 data:
   dataset: "metallo"
-  mode: "multimodal"  # "image", "spectral", "multimodal"
+  mode: "unified"  # "metallographic", "spectral", "unified"
   
   # Data directory containing DOS folders
   data_dir: ".dataset"  # Directory with DOS folders (e.g., 5.844339467/)

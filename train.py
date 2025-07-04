@@ -6,7 +6,7 @@ from transformers import Trainer, TrainingArguments
 from transformers import PreTrainedModel, PretrainedConfig
 
 import metallo as st
-from metallo.data import UnifiedMetalloDataset
+from metallo.data import UnimetalloDataset
 from metallo.models import ToyNet, ToyNetConfig
 
 log_format = "[%(asctime)s] [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s"
@@ -34,47 +34,47 @@ def create_datasets_from_config(config):
     image_transform = create_image_transforms()
 
     # Create train dataset
-    train_dataset = UnifiedMetalloDataset(
+    train_dataset = UnimetalloDataset(
         data_dir=config.data.data_dir,
         mode=config.data.mode,
         is_train=True,
         is_val=False,
         train_ratio=config.data.split_ratios[0],
         val_ratio=config.data.split_ratios[1],
-        images_per_dos=getattr(config.data, "images_per_dos", 100),
-        spectral_length=getattr(config.data, "spectral_length", 100),
+        images_per_dos=getattr(config.data, "images_per_dos", 30),
+        spectra_per_dos=getattr(config.data, "spectra_per_dos", 2),
         image_transform=image_transform,
-        preprocess_images=getattr(config.data, "preprocess_images", False),
+        process_images=getattr(config.data, "process_images", False),
         normalize_spectral=getattr(config.data, "normalize_spectral", True),
     )
 
     # Create validation dataset
-    eval_dataset = UnifiedMetalloDataset(
+    eval_dataset = UnimetalloDataset(
         data_dir=config.data.data_dir,
         mode=config.data.mode,
         is_train=False,
         is_val=True,
         train_ratio=config.data.split_ratios[0],
         val_ratio=config.data.split_ratios[1],
-        images_per_dos=getattr(config.data, "images_per_dos", 100),
-        spectral_length=getattr(config.data, "spectral_length", 100),
+        images_per_dos=getattr(config.data, "images_per_dos", 30),
+        spectra_per_dos=getattr(config.data, "spectra_per_dos", 2),
         image_transform=image_transform,
-        preprocess_images=getattr(config.data, "preprocess_images", False),
+        process_images=getattr(config.data, "process_images", False),
         normalize_spectral=getattr(config.data, "normalize_spectral", True),
     )
 
     # Create test dataset
-    test_dataset = UnifiedMetalloDataset(
+    test_dataset = UnimetalloDataset(
         data_dir=config.data.data_dir,
         mode=config.data.mode,
         is_train=False,
         is_val=False,
         train_ratio=config.data.split_ratios[0],
         val_ratio=config.data.split_ratios[1],
-        images_per_dos=getattr(config.data, "images_per_dos", 100),
-        spectral_length=getattr(config.data, "spectral_length", 100),
+        images_per_dos=getattr(config.data, "images_per_dos", 30),
+        spectra_per_dos=getattr(config.data, "spectra_per_dos", 2),
         image_transform=image_transform,
-        preprocess_images=getattr(config.data, "preprocess_images", False),
+        process_images=getattr(config.data, "process_images", False),
         normalize_spectral=getattr(config.data, "normalize_spectral", True),
     )
 
