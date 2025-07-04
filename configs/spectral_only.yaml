@@ -48,7 +48,7 @@ training:
   greater_is_better: false
 
 wandb:
-  project: "metallo-dos-prediction"
+  project: "metallo"
   entity: null
   name: "spectral-only-experiment"
-  tags: ["spectral", "libs", "spectral-only", "dos-prediction"]
+  tags: []

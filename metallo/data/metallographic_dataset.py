@@ -12,7 +12,7 @@ class MetallographicDataset(Dataset):
     Dataset for metallographic images.
     Each DOS folder contains multiple .tif images.
     """
-    
+
     def __init__(
         self,
         data_dir: str,
@@ -22,11 +22,11 @@ class MetallographicDataset(Dataset):
         train_ratio: float = 0.8,
         val_ratio: float = 0.1,
         images_per_dos: int = 100,
-        preprocess: bool = False
+        preprocess: bool = False,
     ):
         """
         Initialize metallographic dataset.
-        
+
         Args:
             data_dir: Directory containing DOS folders with images
             image_transform: Image transformations
@@ -44,13 +44,16 @@ class MetallographicDataset(Dataset):
         self.val_ratio = val_ratio
         self.images_per_dos = images_per_dos
         self.preprocess = preprocess
-        
+
         # Get DOS folders and sort them
-        self.dos_folders = sorted([
-            f for f in os.listdir(data_dir) 
-            if os.path.isdir(os.path.join(data_dir, f))
-        ])
-        
+        self.dos_folders = sorted(
+            [
+                f
+                for f in os.listdir(data_dir)
+                if os.path.isdir(os.path.join(data_dir, f))
+            ]
+        )
+
         # Extract DOS values from folder names
         self.dos_values = []
         for folder in self.dos_folders:
@@ -60,78 +63,90 @@ class MetallographicDataset(Dataset):
             except ValueError:
                 logging.warning(f"Skipping folder {folder} - not a valid DOS value")
                 continue
-        
+
         # Set up image transforms
         if image_transform is None:
-            self.image_transform = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Resize(336),
-                transforms.CenterCrop(300)
-            ])
+            self.image_transform = transforms.Compose(
+                [
+                    transforms.ToTensor(),
+                    transforms.Resize(336),
+                    transforms.CenterCrop(300),
+                ]
+            )
         else:
             self.image_transform = image_transform
-        
+
         # Calculate split indices
         if self.is_train:
             self.start_idx = 0
             self.end_idx = int(self.images_per_dos * self.train_ratio)
         elif self.is_val:
             self.start_idx = int(self.images_per_dos * self.train_ratio)
-            self.end_idx = int(self.images_per_dos * (self.train_ratio + self.val_ratio))
+            self.end_idx = int(
+                self.images_per_dos * (self.train_ratio + self.val_ratio)
+            )
         else:  # test
-            self.start_idx = int(self.images_per_dos * (self.train_ratio + self.val_ratio))
+            self.start_idx = int(
+                self.images_per_dos * (self.train_ratio + self.val_ratio)
+            )
             self.end_idx = self.images_per_dos
-        
+
         self.images_per_split = self.end_idx - self.start_idx
-        
-        logging.info(f"MetallographicDataset: {len(self.dos_values)} DOS values, "
-                    f"{self.images_per_split} images per DOS, "
-                    f"total samples: {len(self)}")
-    
+
+        logging.info(
+            f"MetallographicDataset: {len(self.dos_values)} DOS values, "
+            f"{self.images_per_split} images per DOS, "
+            f"total samples: {len(self)}"
+        )
+
     def __len__(self) -> int:
         return len(self.dos_values) * self.images_per_split
-    
+
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, float]:
         """
         Get image and corresponding DOS value.
-        
+
         Args:
             index: Sample index
-            
+
         Returns:
             Tuple of (image_tensor, dos_value)
         """
         # Calculate which DOS folder and which image within that folder
         dos_idx = index // self.images_per_split
         img_idx = index % self.images_per_split + self.start_idx
-        
+
         dos_value = self.dos_values[dos_idx]
         dos_folder = self.dos_folders[dos_idx]
-        
+
         # Get image files in the DOS folder
         dos_path = os.path.join(self.data_dir, dos_folder)
-        image_files = sorted([
-            f for f in os.listdir(dos_path) 
-            if f.lower().endswith(('.tif', '.tiff', '.png', '.jpg', '.jpeg'))
-        ])
-        
+        image_files = sorted(
+            [
+                f
+                for f in os.listdir(dos_path)
+                if f.lower().endswith((".tif", ".tiff", ".png", ".jpg", ".jpeg"))
+            ]
+        )
+
         if img_idx >= len(image_files):
             # If we don't have enough images, cycle through available ones
             img_idx = img_idx % len(image_files)
-        
+
         image_path = os.path.join(dos_path, image_files[img_idx])
-        
+
         # Load and transform image
         if self.preprocess:
             # Import preprocess function if needed
             try:
                 from preprocess import preprocess
+
                 image = preprocess(image_path, fill_mode="adaptive")
             except ImportError:
                 image = Image.open(image_path).convert("RGB")
         else:
             image = Image.open(image_path).convert("RGB")
-        
+
         image_tensor = self.image_transform(image)
-        
+
         return image_tensor, dos_value

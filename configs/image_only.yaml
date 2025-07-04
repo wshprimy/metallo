@@ -48,7 +48,7 @@ training:
   greater_is_better: false
 
 wandb:
-  project: "metallo-dos-prediction"
+  project: "metallo"
   entity: null
   name: "image-only-experiment"
-  tags: ["metallographic", "image-only", "dos-prediction"]
+  tags: []

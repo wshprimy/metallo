@@ -5,8 +5,8 @@ from .metallo_dataset import MetalloDataset, create_datasets
 
 __all__ = [
     "MetallographicDataset",
-    "SpectralDataset", 
+    "SpectralDataset",
     "UnifiedMetalloDataset",
     "MetalloDataset",
-    "create_datasets"
+    "create_datasets",
 ]

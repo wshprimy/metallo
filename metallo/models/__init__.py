@@ -1,7 +1,6 @@
-from .toynet import SimpleToyNet, ToyNet, create_toynet
+from .toynet import ToyNet, ToyNetConfig
 
 __all__ = [
-    "SimpleToyNet",
-    "ToyNet", 
-    "create_toynet"
+    "ToyNet",
+    "ToyNetConfig",
 ]
