@@ -7,56 +7,40 @@ from typing import Optional, List, Tuple
 import logging
 import cv2
 import numpy as np
-from matplotlib import pyplot as plt
-
-
-def process(image_path, thres=110, cover=500, color=(135, 135, 135), fill_mode="fix"):
+def process(image_path):
     """
     Process metallographic images with preprocessing.
     
     Args:
         image_path: Path to the image file
-        thres: Threshold value (default 110)
-        cover: Cover value (default 500)
-        color: RGB color tuple (default (135, 135, 135))
-        fill_mode: Fill mode - "fix" or "adaptive" (default "fix")
     
     Returns:
-        Processed image as numpy array
+        Processed image as numpy array (uint8)
     """
-    img = plt.imread(image_path)
+    img = cv2.imread(image_path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     
     mask = img.copy()
     mask = cv2.medianBlur(mask, 3)
     
-    mask = [135.0, 135.0, 135.0] - mask
+    mask = np.array([135.0, 135.0, 135.0], dtype=np.float32) - mask.astype(np.float32)
+    mask = np.clip(mask, 0, 255).astype(np.uint8)
     
-    return np.float32(mask)
+    return mask
 
 
-def transform(image, image_transform=None):
+def transform(image, image_transform):
     """
     Apply transformations to the image.
     
     Args:
         image: PIL Image or numpy array
-        image_transform: Optional transform to apply
+        image_transform: Transform to apply
     
     Returns:
         Transformed image tensor
     """
-    if image_transform is None:
-        image_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Resize(336),
-            transforms.CenterCrop(300),
-        ])
-    
     if isinstance(image, np.ndarray):
-        # Convert numpy array to PIL Image
-        if image.dtype == np.float32:
-            image = (image * 255).astype(np.uint8)
         image = Image.fromarray(image)
     
     return image_transform(image)
@@ -192,7 +176,7 @@ class Metallographic(Dataset):
 
         # Load and transform image
         if self.process_images:
-            image = process(image_path, fill_mode="adaptive")
+            image = process(image_path)
             image_tensor = transform(image, self.image_transform)
         else:
             image = Image.open(image_path).convert("RGB")
