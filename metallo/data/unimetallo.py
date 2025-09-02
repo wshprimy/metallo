@@ -56,6 +56,7 @@ class MetalloDS(Dataset):
         self.process_images = process_images
         self.normalize_spectral = normalize_spectral
         self.spectra_per_image = spectra_per_image
+        assert self.spectra_per_image == 24, "Currently only supports 24 spectra per image"
 
         # Validate mode
         if mode not in ["image", "spectral", "unified"]:
@@ -98,24 +99,24 @@ class MetalloDS(Dataset):
     def _split_spectra_to_images(self, full_spectrum: np.ndarray) -> Dict[int, np.ndarray]:
         """
         Split 768 spectra into 32 images (24 spectra per image).
-        
-        This is a placeholder function that will be implemented by human programmers.
-        Currently implements the basic splitting logic.
-        
+
         Args:
             full_spectrum: Full spectrum array of shape (768, 1600)
             
         Returns:
             Dictionary mapping image_number (1-32) to corresponding spectra (24, 1600)
         """
-        # TODO: Human programmers will implement custom splitting logic here
-        # Current implementation: simple sequential splitting
-        
         image_spectra_dict = {}
-        for image_num in range(1, 33):  # Images 1-32
-            start_idx = (image_num - 1) * self.spectra_per_image
-            end_idx = start_idx + self.spectra_per_image
-            image_spectra = full_spectrum[start_idx:end_idx]  # Shape: (24, 1600)
+        for image_num in range(0, 32):
+            start_idx = image_num // 8 * 192 + image_num % 8 * 4
+            image_spectra_idx = []
+            image_spectra = [] # Shape: (24, 1600)
+
+            for i in range(0, 6):
+                for j in range(0, 4):
+                    spectrum_idx = start_idx + i * 32 + j
+                    image_spectra_idx.append(spectrum_idx)
+                    image_spectra.append(full_spectrum[spectrum_idx, :])
             
             # Normalize if requested
             if self.normalize_spectral:
@@ -124,8 +125,9 @@ class MetalloDS(Dataset):
                 max_vals = np.where(max_vals > 0, max_vals, 1.0)  # Avoid division by zero
                 image_spectra = image_spectra / max_vals
             
-            image_spectra_dict[image_num] = image_spectra
-            
+            image_spectra_dict[image_num + 1] = image_spectra
+        
+        # print(image_spectra_dict)
         return image_spectra_dict
 
     def _discover_samples(self) -> List[Dict[str, Any]]:
