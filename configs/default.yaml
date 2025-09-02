@@ -2,7 +2,7 @@ eval_only: false
 
 model:
   name: "toynet"
-  mode: "unified"  # "metallographic", "spectral", "unified"
+  mode: "unified"
   
   # Image-related parameters
   image_backbone: "resnet18"  # "resnet18", "resnet50"
@@ -17,15 +17,13 @@ model:
 
 data:
   dataset: "metallo"
-  mode: "unified"  # "metallographic", "spectral", "unified"
+  mode: "unified"
   
   # Data directory containing DOS folders
-  data_dir: ".dataset"  # Directory with DOS folders (e.g., 5.844339467/)
+  data_dir: ".dataset/metallography"
   
   # Data processing parameters
   split_ratios: [0.8, 0.1, 0.1]  # train, val, test
-  images_per_dos: 30  # Number of images to use per DOS value
-  spectra_per_dos: 2  # Number of spectra per DOS value
   process_images: false  # Whether to apply image preprocessing
   normalize_spectral: true  # Whether to normalize spectral data
 

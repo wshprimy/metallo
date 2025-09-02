@@ -1,116 +1,238 @@
+import os
 import torch
 from torch.utils.data import Dataset
-from typing import Optional, Dict, Any, Tuple
+from PIL import Image
+import torchvision.transforms as transforms
+import numpy as np
+from typing import Optional, Dict, Any, Tuple, List
 import logging
 
-from .metallographic import Metallographic
-from .spectral import Spectral
 
-
-class UnimetalloDataset(Dataset):
+class MetalloDS(Dataset):
     """
-    Unified dataset that combines metallographic images and spectral data.
-    Supports metallographic-only, spectral-only, and unified modes.
+    Unified dataset for metallography images and spectral data.
+    
+    Dataset structure:
+    - 2 physical slices × 8 time points × 32 images = 512 total samples
+    - Each folder contains: 32 PNG images + 1 spectrum.npy file
+    - Each image corresponds to 24 spectra (768 spectra ÷ 32 images = 24)
+    - Sample format: 1 image + 24 corresponding spectra
     """
 
     def __init__(
         self,
         data_dir: str,
-        mode: str = "unified",  # "metallographic", "spectral", "unified"
+        mode: str = "unified",  # "image", "spectral", "unified"
         is_train: bool = True,
         is_val: bool = False,
         train_ratio: float = 0.8,
         val_ratio: float = 0.1,
-        images_per_dos: int = 30,
-        spectra_per_dos: int = 2,
-        image_transform: Optional[Any] = None,
+        image_transform: Optional[transforms.Compose] = None,
         process_images: bool = False,
         normalize_spectral: bool = True,
+        spectra_per_image: int = 24,
     ):
         """
-        Initialize unified dataset with mode support.
+        Initialize unified metallography dataset.
 
         Args:
-            data_dir: Directory containing DOS folders
-            mode: Dataset mode - "metallographic", "spectral", or "unified"
+            data_dir: Root directory containing slice folders (e.g., '.dataset/metallography')
+            mode: Dataset mode - "image", "spectral", or "unified"
             is_train: Whether this is training set
             is_val: Whether this is validation set
-            train_ratio: Ratio for training split
-            val_ratio: Ratio for validation split
-            images_per_dos: Number of images per DOS value (default 30)
-            spectra_per_dos: Number of spectra per DOS value (default 2)
+            train_ratio: Ratio for training split (default: 0.8)
+            val_ratio: Ratio for validation split (default: 0.1)
             image_transform: Image transformations
-            process_images: Whether to preprocess images
+            process_images: Whether to apply image preprocessing
             normalize_spectral: Whether to normalize spectral data
+            spectra_per_image: Number of spectra per image (default: 24)
         """
         self.data_dir = data_dir
         self.mode = mode
         self.is_train = is_train
         self.is_val = is_val
-        self.images_per_dos = images_per_dos
-        self.spectra_per_dos = spectra_per_dos
+        self.train_ratio = train_ratio
+        self.val_ratio = val_ratio
+        self.process_images = process_images
+        self.normalize_spectral = normalize_spectral
+        self.spectra_per_image = spectra_per_image
 
         # Validate mode
-        if mode not in ["metallographic", "spectral", "unified"]:
-            raise ValueError(
-                f"Invalid mode: {mode}. Must be 'metallographic', 'spectral', or 'unified'"
-            )
+        if mode not in ["image", "spectral", "unified"]:
+            raise ValueError(f"Invalid mode: {mode}. Must be 'image', 'spectral', or 'unified'")
 
-        # Initialize sub-datasets based on mode
-        self.image_dataset = None
-        self.spectral_dataset = None
+        # Set up image transforms
+        if image_transform is None:
+            self.image_transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Resize(336),
+                transforms.CenterCrop(300),
+            ])
+        else:
+            self.image_transform = image_transform
 
-        if mode in ["metallographic", "unified"]:
-            self.image_dataset = Metallographic(
-                data_dir=data_dir,
-                image_transform=image_transform,
-                is_train=is_train,
-                is_val=is_val,
-                train_ratio=train_ratio,
-                val_ratio=val_ratio,
-                images_per_dos=images_per_dos,
-                process_images=process_images,
-            )
+        # Discover all sample paths
+        self.samples = self._discover_samples()
+        
+        # Calculate split indices
+        total_samples = len(self.samples)
+        if self.is_train:
+            self.start_idx = 0
+            self.end_idx = int(total_samples * self.train_ratio)
+        elif self.is_val:
+            self.start_idx = int(total_samples * self.train_ratio)
+            self.end_idx = int(total_samples * (self.train_ratio + self.val_ratio))
+        else:  # test
+            self.start_idx = int(total_samples * (self.train_ratio + self.val_ratio))
+            self.end_idx = total_samples
 
-        if mode in ["spectral", "unified"]:
-            self.spectral_dataset = Spectral(
-                data_dir=data_dir,
-                is_train=is_train,
-                is_val=is_val,
-                train_ratio=train_ratio,
-                val_ratio=val_ratio,
-                spectral_length=1600,  # Full spectrum length
-                normalize=normalize_spectral,
-            )
-
-        # Calculate dataset size based on mode
-        if mode == "metallographic":
-            self.dataset_size = len(self.image_dataset)
-        elif mode == "spectral":
-            self.dataset_size = len(self.spectral_dataset)
-        else:  # unified
-            # Calculate dataset size based on unique image-spectrum pairing
-            # Each image gets paired with exactly one spectrum
-            num_dos_values = min(
-                len(self.image_dataset.dos_values),
-                len(self.spectral_dataset.dos_values),
-            )
-            
-            # Calculate how many unique pairs we can create per DOS
-            # Each spectrum can be paired with multiple images
-            images_per_spectrum = self.images_per_dos // self.spectra_per_dos
-            pairs_per_dos = self.images_per_dos  # Each image gets one spectrum
-            
-            self.dataset_size = num_dos_values * pairs_per_dos
-            self.pairs_per_dos = pairs_per_dos
-            self.images_per_spectrum = images_per_spectrum
+        # Filter samples for current split
+        self.samples = self.samples[self.start_idx:self.end_idx]
 
         logging.info(
-            f"UnimetalloDataset: mode={mode}, size={self.dataset_size}"
+            f"UnifiedMetalloDataset: mode={mode}, "
+            f"split={'train' if is_train else 'val' if is_val else 'test'}, "
+            f"samples={len(self.samples)}"
         )
 
+    def _split_spectra_to_images(self, full_spectrum: np.ndarray) -> Dict[int, np.ndarray]:
+        """
+        Split 768 spectra into 32 images (24 spectra per image).
+        
+        This is a placeholder function that will be implemented by human programmers.
+        Currently implements the basic splitting logic.
+        
+        Args:
+            full_spectrum: Full spectrum array of shape (768, 1600)
+            
+        Returns:
+            Dictionary mapping image_number (1-32) to corresponding spectra (24, 1600)
+        """
+        # TODO: Human programmers will implement custom splitting logic here
+        # Current implementation: simple sequential splitting
+        
+        image_spectra_dict = {}
+        for image_num in range(1, 33):  # Images 1-32
+            start_idx = (image_num - 1) * self.spectra_per_image
+            end_idx = start_idx + self.spectra_per_image
+            image_spectra = full_spectrum[start_idx:end_idx]  # Shape: (24, 1600)
+            
+            # Normalize if requested
+            if self.normalize_spectral:
+                # Normalize each spectrum individually
+                max_vals = np.max(image_spectra, axis=1, keepdims=True)
+                max_vals = np.where(max_vals > 0, max_vals, 1.0)  # Avoid division by zero
+                image_spectra = image_spectra / max_vals
+            
+            image_spectra_dict[image_num] = image_spectra
+            
+        return image_spectra_dict
+
+    def _discover_samples(self) -> List[Dict[str, Any]]:
+        """
+        Discover all samples in the dataset and load spectra during initialization.
+        
+        Returns:
+            List of sample dictionaries containing paths, metadata, and pre-loaded spectra
+        """
+        samples = []
+        
+        # Expected structure: data_dir/slice/time_point/
+        slice_dirs = sorted([d for d in os.listdir(self.data_dir)
+                           if os.path.isdir(os.path.join(self.data_dir, d))])
+        
+        for slice_id in slice_dirs:
+            slice_path = os.path.join(self.data_dir, slice_id)
+            
+            # Get time point directories
+            time_dirs = sorted([d for d in os.listdir(slice_path)
+                              if os.path.isdir(os.path.join(slice_path, d))])
+            
+            for time_point in time_dirs:
+                time_path = os.path.join(slice_path, time_point)
+                
+                # Check if spectrum.npy exists
+                spectrum_path = os.path.join(time_path, 'spectrum.npy')
+                if not os.path.exists(spectrum_path):
+                    logging.warning(f"No spectrum.npy found in {time_path}")
+                    continue
+                
+                # Load and split spectra for this time point
+                logging.info(f"Loading spectra from {spectrum_path}")
+                full_spectrum = np.load(spectrum_path)  # Shape: (768, 1600)
+                image_spectra_dict = self._split_spectra_to_images(full_spectrum)
+                
+                # Get all PNG images
+                image_files = sorted(
+                    [f for f in os.listdir(time_path) if f.lower().endswith('.png')],
+                    key=lambda x: int(os.path.splitext(x)[0])
+                )
+                
+                # Create samples for each image with pre-loaded spectra
+                for img_idx, img_file in enumerate(image_files):
+                    img_path = os.path.join(time_path, img_file)
+                    
+                    # Extract image number from filename (e.g., "1.png" -> 1)
+                    try:
+                        img_num = int(os.path.splitext(img_file)[0])
+                    except ValueError:
+                        logging.warning(f"Cannot parse image number from {img_file}")
+                        continue
+                    
+                    # Get corresponding spectra for this image
+                    if img_num in image_spectra_dict:
+                        image_spectra = image_spectra_dict[img_num]  # Shape: (24, 1600)
+                    else:
+                        logging.warning(f"No spectra found for image {img_num} in {time_path}")
+                        continue
+                    
+                    sample = {
+                        'slice_id': slice_id,
+                        'time_point': time_point,
+                        'image_number': img_num,
+                        'image_path': img_path,
+                        'spectra': torch.tensor(image_spectra, dtype=torch.float32),  # Pre-loaded spectra (24, 1600)
+                    }
+                    samples.append(sample)
+        
+        logging.info(f"Discovered {len(samples)} samples across {len(slice_dirs)} slices with pre-loaded spectra")
+        return samples
+
+    def _load_image(self, image_path: str) -> torch.Tensor:
+        """Load and preprocess an image."""
+        if self.process_images:
+            image = self._process_image(image_path)
+            image = Image.fromarray(image)
+        else:
+            image = Image.open(image_path).convert("RGB")
+        
+        return self.image_transform(image)
+
+    def _process_image(self, image_path: str) -> np.ndarray:
+        """
+        Process metallographic images with preprocessing.
+        
+        Args:
+            image_path: Path to the image file
+        
+        Returns:
+            Processed image as numpy array (uint8)
+        """
+        import cv2
+        
+        img = cv2.imread(image_path)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        
+        mask = img.copy()
+        mask = cv2.medianBlur(mask, 3)
+        
+        mask = np.array([135.0, 135.0, 135.0], dtype=np.float32) - mask.astype(np.float32)
+        mask = np.clip(mask, 0, 255).astype(np.uint8)
+        
+        return mask
+
     def __len__(self) -> int:
-        return self.dataset_size
+        return len(self.samples)
 
     def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
         """
@@ -120,84 +242,19 @@ class UnimetalloDataset(Dataset):
             index: Sample index
 
         Returns:
-            Dictionary containing the requested data modalities and labels
+            Dictionary containing the requested data modalities
         """
+        sample = self.samples[index]
         result = {}
-
-        if self.mode == "metallographic":
-            image, dos_value = self.image_dataset[index]
+        # result["slice_id"] = sample['slice_id']
+        # result["time_point"] = sample['time_point']
+        # result["image_number"] = sample['image_number']
+        result["sample_id"] = f"{sample['slice_id']}_{sample['time_point']}_{sample['image_number']}"
+        
+        if self.mode in ["image", "unified"]:
+            image = self._load_image(sample['image_path'])
             result["image"] = image
-            result["labels"] = torch.tensor(dos_value, dtype=torch.float32)
-            result["x"] = image  # For backward compatibility
-
-        elif self.mode == "spectral":
-            spectral, dos_value = self.spectral_dataset[index]
-            result["spectral"] = spectral
-            result["labels"] = torch.tensor(dos_value, dtype=torch.float32)
-            result["x"] = spectral  # For backward compatibility
-
-        else:  # unified
-            # Calculate which DOS folder and which pair within that DOS
-            dos_idx = index // self.pairs_per_dos
-            pair_idx_within_dos = index % self.pairs_per_dos
-
-            # Get the image directly
-            img_idx = dos_idx * self.image_dataset.images_per_split + pair_idx_within_dos
-            img_idx = min(img_idx, len(self.image_dataset) - 1)
-            image, dos_value = self.image_dataset[img_idx]
-
-            # Map image to its corresponding spectrum
-            # Each spectrum is shared by multiple images
-            spectrum_idx_within_dos = pair_idx_within_dos // self.images_per_spectrum
-            spectrum_idx_within_dos = min(spectrum_idx_within_dos, self.spectra_per_dos - 1)
-            
-            spec_idx = dos_idx * self.spectral_dataset.segments_per_split + spectrum_idx_within_dos
-            spec_idx = min(spec_idx, len(self.spectral_dataset) - 1)
-            spectral, _ = self.spectral_dataset[spec_idx]
-
-            result["image"] = image
-            result["spectral"] = spectral
-            result["labels"] = torch.tensor(dos_value, dtype=torch.float32)
+        if self.mode in ["spectral", "unified"]:
+            result["spectral"] = sample['spectra']
 
         return result
-
-    def get_dos_values(self) -> list:
-        """Get list of DOS values in the dataset."""
-        if self.mode == "metallographic":
-            return self.image_dataset.dos_values
-        elif self.mode == "spectral":
-            return self.spectral_dataset.dos_values
-        else:  # unified
-            # Return the intersection of DOS values from both modalities
-            img_dos = set(self.image_dataset.dos_values)
-            spec_dos = set(self.spectral_dataset.dos_values)
-            return sorted(list(img_dos.intersection(spec_dos)))
-
-    def get_dataset_info(self) -> Dict[str, Any]:
-        """Get information about the dataset."""
-        info = {
-            "mode": self.mode,
-            "size": self.dataset_size,
-            "dos_values": self.get_dos_values(),
-            "num_dos_values": len(self.get_dos_values()),
-        }
-
-        if self.mode in ["metallographic", "unified"]:
-            info["images_per_dos"] = self.images_per_dos
-            
-        if self.mode in ["spectral", "unified"]:
-            info["spectra_per_dos"] = self.spectra_per_dos
-            
-        if self.mode == "unified":
-            info["images_per_spectrum"] = self.images_per_spectrum
-            info["pairs_per_dos"] = self.pairs_per_dos
-
-        if self.image_dataset:
-            info["images_per_split"] = self.image_dataset.images_per_split
-            info["image_transform"] = str(self.image_dataset.image_transform)
-
-        if self.spectral_dataset:
-            info["spectral_segments_per_split"] = self.spectral_dataset.segments_per_split
-            info["spectral_length"] = self.spectral_dataset.spectral_length
-
-        return info

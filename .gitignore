@@ -210,3 +210,5 @@ __marimo__/
 output/
 wandb/
 tests/
+imagetrain/
+libstrain/

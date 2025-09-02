@@ -1,9 +1,5 @@
-from .metallographic import Metallographic
-from .spectral import Spectral
-from .unimetallo import UnimetalloDataset
+from .unimetallo import MetalloDS
 
 __all__ = [
-    "Metallographic",
-    "Spectral",
-    "UnimetalloDataset",
+    "MetalloDS",
 ]
