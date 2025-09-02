@@ -77,7 +77,6 @@ def create_datasets_from_config(config):
     logger.info(f"  Eval: {len(eval_dataset)} samples")
     logger.info(f"  Test: {len(test_dataset)} samples")
     logger.info(f"  Mode: {config.data.mode}")
-    logger.info(f"  Dataset info: {train_dataset.get_dataset_info()}")
 
     return {"train": train_dataset, "eval": eval_dataset, "test": test_dataset}
 
