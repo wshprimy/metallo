@@ -3,7 +3,6 @@ import logging
 import torch
 import torchvision.transforms as transforms
 from transformers import Trainer, TrainingArguments
-from transformers import PreTrainedModel, PretrainedConfig
 
 import metallo as st
 from metallo.data import MetalloDS
@@ -68,18 +67,14 @@ def main():
     """Main training function."""
     config, config_path = st.load_config_with_args()
     os.makedirs(config.training.output_dir, exist_ok=True)
-
-    # Create datasets using new unified dataloader
     datasets = create_datasets_from_config(config)
 
-    # Set up callbacks
     callbacks = []
     trainloss_callback = st.TrainingLossCallback()
     callbacks.append(trainloss_callback)
     wandb_callback = st.WandbLogger(config, config_path)
     callbacks.append(wandb_callback)
 
-    # Create model configuration
     model_config = ToyNetConfig(
         mode=config.model.mode,
         image_backbone=getattr(config.model, "image_backbone", "resnet18"),
@@ -89,43 +84,14 @@ def main():
         num_outputs=getattr(config.model, "num_outputs", 1),
     )
 
-    # Create model
-    model = ToyNet(model_config)
+    if config.mode.test_only is False:
+        logger.info("Running in training mode.")
+        model = ToyNet(model_config)
+        logger.info(f"Model architecture:\n{model}")
+        logger.info(f"Model mode: {config.model.mode}")
+        logger.info(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-    logger.info(f"Model architecture:\n{model}")
-    logger.info(f"Model mode: {config.model.mode}")
-    logger.info(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
-
-    if getattr(config, "eval_only", False):
-        logger.info("Running in eval mode.")
-        training_args_dict = config.training.__dict__.copy()
-        training_args_dict.update(
-            {
-                "eval_strategy": "no",
-                "save_strategy": "no",
-                "logging_strategy": "no",
-                "num_train_epochs": 0,
-            }
-        )
-        training_args = TrainingArguments(**training_args_dict)
-
-        trainer = Trainer(
-            model=model,
-            args=training_args,
-            eval_dataset=datasets["eval"],
-            compute_metrics=st.compute_regression_metrics,
-        )
-
-        with torch.no_grad():
-            eval_results = trainer.evaluate()
-            logger.info("Eval Results:")
-            for metric, value in eval_results.items():
-                if metric.startswith("eval_"):
-                    logger.info(f"  {metric}: {value:.6f}")
-    else:
-        # Training mode
         training_args = TrainingArguments(**config.training.__dict__)
-
         trainer = Trainer(
             model=model,
             args=training_args,
@@ -146,6 +112,48 @@ def main():
             logger.info("Evaluating on test set.")
             test_results = trainer.evaluate(eval_dataset=datasets["test"])
             logger.info("Test Results:")
+            for metric, value in test_results.items():
+                if metric.startswith("eval_"):
+                    logger.info(f"  {metric}: {value:.6f}")
+
+    else:
+        logger.info("Running in test mode.")
+        model = ToyNet.from_pretrained(config.mode.checkpoint_path, config=model_config)
+        logger.info(f"Model architecture:\n{model}")
+        logger.info(f"Model mode: {config.model.mode}")
+        logger.info(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
+
+        training_args_dict = config.training.__dict__.copy()
+        training_args_dict.update(
+            {
+                "eval_strategy": "no",
+                "save_strategy": "no",
+                "logging_strategy": "no",
+                "num_train_epochs": 0,
+            }
+        )
+        training_args = TrainingArguments(**training_args_dict)
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            eval_dataset=datasets["test"],
+            compute_metrics=st.compute_regression_metrics,
+        )
+
+        with torch.no_grad():
+            prediction_output = trainer.predict(test_dataset=datasets["test"])
+
+            predictions = prediction_output.predictions
+            labels = prediction_output.label_ids
+
+            logger.info("Raw Predictions:")
+            logger.info(predictions)
+            logger.info("True Labels:")
+            logger.info(labels)
+
+        with torch.no_grad():
+            test_results = trainer.evaluate()
+            logger.info("Eval Results:")
             for metric, value in test_results.items():
                 if metric.startswith("eval_"):
                     logger.info(f"  {metric}: {value:.6f}")

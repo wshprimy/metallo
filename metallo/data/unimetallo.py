@@ -294,6 +294,5 @@ class MetalloDS(Dataset):
             result["image"] = self._load_image(sample["image_path"])
         if self.mode in ["spectral", "unified"]:
             result["spectral"] = sample["spectra"]
-        if self.split != "test":
-            result["labels"] = sample["dos"]
+        result["labels"] = sample["dos"]
         return result

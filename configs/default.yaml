@@ -1,50 +1,40 @@
-eval_only: false
-
-model:
-  name: "toynet"
-  mode: "unified"
-  
-  # Image-related parameters
-  image_backbone: "resnet18"  # "resnet18", "resnet50"
-  
-  # Spectral-related parameters
-  spectral_input_dim: 38400  # 24 spectra × 1600 dims = 38400 for unified mode
-  
-  # Model architecture parameters
-  hidden_dim: 256
-  dropout: 0.2
-  num_outputs: 1  # For DOS regression
+mode:
+  test_only: false
+  checkpoint_path: "./output/checkpoint-1500"
 
 data:
   dataset: "metallo"
   mode: "unified"
-  
-  # Data directory containing DOS folders
-  data_dir: ".dataset/metallography"
-  
-  # Data processing parameters
-  split_ratios: [0.8, 0.1, 0.1]  # train, val, test
+  data_dir: "/ramdisk/.dataset/metallography"
   process_images: false  # Whether to apply image preprocessing
   normalize_spectral: true  # Whether to normalize spectral data
 
+model:
+  name: "toynet"
+  mode: "unified"
+  image_backbone: "resnet18"  # "resnet18", "resnet50"
+  hidden_dim: 256
+  dropout: 0.2
+  num_outputs: 1
+
 training:
   seed: 42
-  dataloader_num_workers: 0
+  dataloader_num_workers: 16
   output_dir: "./output"
-  learning_rate: !!float 1.0e-4
-  warmup_steps: 100
+  learning_rate: !!float 3.0e-4
+  warmup_steps: 5
   weight_decay: 0.01
-  num_train_epochs: 10
-  per_device_train_batch_size: 4  # Reduced for memory efficiency
-  per_device_eval_batch_size: 8
-  eval_accumulation_steps: 8
-  save_total_limit: 3
+  num_train_epochs: 500
+  per_device_train_batch_size: 64
+  per_device_eval_batch_size: 64
+  # eval_accumulation_steps: 8
+  save_total_limit: 5
   report_to: ["wandb"]
   logging_strategy: "steps"
-  logging_steps: 50
+  logging_steps: 10
   eval_strategy: "steps"
-  eval_steps: 200
-  save_steps: 200
+  eval_steps: 50
+  save_steps: 100
   save_strategy: "steps"
   load_best_model_at_end: true
   metric_for_best_model: "eval_loss"
