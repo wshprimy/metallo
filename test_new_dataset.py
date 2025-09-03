@@ -26,7 +26,7 @@ def test_dataset():
             dataset = MetalloDS(
                 data_dir=".dataset/metallography",
                 mode=mode,
-                is_train=True,
+                split="train",
                 train_ratio=0.8,
                 val_ratio=0.1,
             )
@@ -56,15 +56,9 @@ def test_dataset():
     # Test train/val/test splits
     print(f"\n--- Testing data splits ---")
     try:
-        train_ds = MetalloDS(
-            ".dataset/metallography", mode="unified", is_train=True, is_val=False
-        )
-        val_ds = MetalloDS(
-            ".dataset/metallography", mode="unified", is_train=False, is_val=True
-        )
-        test_ds = MetalloDS(
-            ".dataset/metallography", mode="unified", is_train=False, is_val=False
-        )
+        train_ds = MetalloDS(".dataset/metallography", mode="unified", split="train")
+        val_ds = MetalloDS(".dataset/metallography", mode="unified", split="eval")
+        test_ds = MetalloDS(".dataset/metallography", mode="unified", split="test")
 
         print(f"✓ Train samples: {len(train_ds)}")
         print(f"✓ Val samples: {len(val_ds)}")
@@ -90,7 +84,7 @@ def test_dataset():
     # Test DataLoader
     print(f"\n--- Testing DataLoader ---")
     try:
-        dataset = MetalloDS(".dataset/metallography", mode="unified", is_train=True)
+        dataset = MetalloDS(".dataset/metallography", mode="unified", split="train")
         dataloader = DataLoader(dataset, batch_size=16, shuffle=True)
 
         batch = next(iter(dataloader))

@@ -1,6 +1,7 @@
 import os
 import torch
 from torch.utils.data import Dataset
+from sklearn.model_selection import train_test_split
 from PIL import Image
 import torchvision.transforms as transforms
 import numpy as np
@@ -31,6 +32,7 @@ class MetalloDS(Dataset):
         process_images: bool = False,
         normalize_spectral: bool = True,
         spectra_per_image: int = 24,
+        random_seed: int = 42,
     ):
         """
         Initialize unified metallography dataset.
@@ -77,21 +79,24 @@ class MetalloDS(Dataset):
         else:
             self.image_transform = image_transform
 
-        # Discover all sample paths
-        self.samples = self._discover_samples()
+        total_samples = self._discover_samples()
+        train_samples, test_samples = train_test_split(
+            total_samples,
+            test_size=1 - self.train_ratio - self.val_ratio,
+            random_state=random_seed,
+        )
+        train_samples, eval_samples = train_test_split(
+            train_samples, test_size=self.val_ratio, random_state=random_seed
+        )
 
-        # Calculate split indices
-        total_samples = len(self.samples)
         if self.split == "train":
-            self.start_idx = 0
-            self.end_idx = int(total_samples * self.train_ratio)
+            self.samples = train_samples
         elif self.split == "eval":
-            self.start_idx = int(total_samples * self.train_ratio)
-            self.end_idx = int(total_samples * (self.train_ratio + self.val_ratio))
+            self.samples = eval_samples
         elif self.split == "test":
-            self.start_idx = int(total_samples * (self.train_ratio + self.val_ratio))
-            self.end_idx = total_samples
-        self.samples = self.samples[self.start_idx : self.end_idx]
+            self.samples = test_samples
+        else:
+            raise ValueError(f"Invalid split: {self.split}")
 
     def _split_spectra_to_images(
         self, full_spectrum: np.ndarray
