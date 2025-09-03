@@ -8,7 +8,7 @@ from transformers import Trainer, TrainingArguments
 
 import metallo as st
 from metallo.data import MetalloDS
-from metallo.models import ToyNet, ToyNetConfig
+from metallo.models import MODEL_MAPPING
 
 log_format = "[%(asctime)s] [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s"
 date_format = "%Y-%m-%d %H:%M:%S"
@@ -77,7 +77,7 @@ def main():
     wandb_callback = st.WandbLogger(config, config_path)
     callbacks.append(wandb_callback)
 
-    model_config = ToyNetConfig(
+    model_config = MODEL_MAPPING[config.model.name]["config"](
         mode=config.model.mode,
         image_backbone=getattr(config.model, "image_backbone", "resnet18"),
         spectral_input_dim=getattr(config.model, "spectral_input_dim", 100),
@@ -88,7 +88,7 @@ def main():
 
     if config.mode.test_only is False:
         logger.info("Running in training mode.")
-        model = ToyNet(model_config)
+        model = MODEL_MAPPING[config.model.name]["model"](model_config)
         logger.info(f"Model architecture:\n{model}")
         logger.info(f"Model mode: {config.model.mode}")
         logger.info(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
@@ -120,7 +120,9 @@ def main():
 
     else:
         logger.info("Running in test mode.")
-        model = ToyNet.from_pretrained(config.mode.checkpoint_path, config=model_config)
+        model = MODEL_MAPPING[config.model.name]["model"](model_config).from_pretrained(
+            config.mode.checkpoint_path, config=model_config
+        )
         logger.info(f"Model architecture:\n{model}")
         logger.info(f"Model mode: {config.model.mode}")
         logger.info(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")

@@ -1,0 +1,47 @@
+mode:
+  test_only: false
+  checkpoint_path: "./output/"
+
+data:
+  dataset: "metallo"
+  mode: "unified"
+  data_dir: "/ramdisk/.dataset/metallography"
+  process_images: false  # Whether to apply image preprocessing
+  normalize_spectral: true  # Whether to normalize spectral data
+
+model:
+  name: "metallonet"
+  mode: "unified"
+  image_backbone: "resnet18"  # "resnet18", "resnet50"
+  hidden_dim: 256
+  dropout: 0.2
+  num_outputs: 1
+
+training:
+  seed: 42
+  dataloader_num_workers: 0
+  output_dir: "./output"
+  learning_rate: !!float 3.0e-4
+  warmup_steps: 15
+  weight_decay: 0.01
+  num_train_epochs: 150
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 2
+  # eval_accumulation_steps: 8
+  save_total_limit: 3
+  report_to: ["wandb"]
+  logging_strategy: "steps"
+  logging_steps: 10
+  eval_strategy: "steps"
+  eval_steps: 50
+  save_steps: 100
+  save_strategy: "steps"
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+
+wandb:
+  project: "metallo"
+  entity: null
+  name: ""
+  tags: []
