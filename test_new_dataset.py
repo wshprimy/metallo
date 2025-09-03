@@ -91,7 +91,7 @@ def test_dataset():
     print(f"\n--- Testing DataLoader ---")
     try:
         dataset = MetalloDS(".dataset/metallography", mode="unified", is_train=True)
-        dataloader = DataLoader(dataset, batch_size=16, shuffle=False)
+        dataloader = DataLoader(dataset, batch_size=16, shuffle=True)
 
         batch = next(iter(dataloader))
         print(f"✓ DataLoader created successfully")

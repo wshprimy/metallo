@@ -24,14 +24,9 @@ def test_model_initialization():
     config = ToyNetConfig(
         mode="unified",
         image_backbone="resnet18",
-        spectral_input_dim=38400,  # 24 × 1600
         hidden_dim=256,
         dropout=0.2,
         num_outputs=1,
-    )
-
-    print(
-        f"Config created: mode={config.mode}, spectral_input_dim={config.spectral_input_dim}"
     )
 
     try:
@@ -127,7 +122,7 @@ def test_mode_validation():
     print("=" * 60)
 
     # Test unified mode requires both inputs
-    config = ToyNetConfig(mode="unified", spectral_input_dim=38400)
+    config = ToyNetConfig(mode="unified")
     model = ToyNet(config)
 
     batch_size = 1
