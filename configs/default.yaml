@@ -8,7 +8,7 @@ model:
   image_backbone: "resnet18"  # "resnet18", "resnet50"
   
   # Spectral-related parameters
-  spectral_input_dim: 1600  # Full spectrum length after transpose
+  spectral_input_dim: 38400  # 24 spectra × 1600 dims = 38400 for unified mode
   
   # Model architecture parameters
   hidden_dim: 256
@@ -29,7 +29,7 @@ data:
 
 training:
   seed: 42
-  dataloader_num_workers: 4
+  dataloader_num_workers: 0
   output_dir: "./output"
   learning_rate: !!float 1.0e-4
   warmup_steps: 100

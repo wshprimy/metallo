@@ -24,8 +24,7 @@ class MetalloDS(Dataset):
         self,
         data_dir: str,
         mode: str = "unified",  # "image", "spectral", "unified"
-        is_train: bool = True,
-        is_val: bool = False,
+        split: str = "train",  # "train", "val", "test"
         train_ratio: float = 0.8,
         val_ratio: float = 0.1,
         image_transform: Optional[transforms.Compose] = None,
@@ -39,8 +38,7 @@ class MetalloDS(Dataset):
         Args:
             data_dir: Root directory containing slice folders (e.g., '.dataset/metallography')
             mode: Dataset mode - "image", "spectral", or "unified"
-            is_train: Whether this is training set
-            is_val: Whether this is validation set
+            split: Dataset split - "train", "val", or "test"
             train_ratio: Ratio for training split (default: 0.8)
             val_ratio: Ratio for validation split (default: 0.1)
             image_transform: Image transformations
@@ -50,8 +48,8 @@ class MetalloDS(Dataset):
         """
         self.data_dir = data_dir
         self.mode = mode
-        self.is_train = is_train
-        self.is_val = is_val
+        self.split = split
+        assert split in ["train", "eval", "test"], "Invalid split"
         self.train_ratio = train_ratio
         self.val_ratio = val_ratio
         self.process_images = process_images
@@ -84,17 +82,15 @@ class MetalloDS(Dataset):
 
         # Calculate split indices
         total_samples = len(self.samples)
-        if self.is_train:
+        if self.split == "train":
             self.start_idx = 0
             self.end_idx = int(total_samples * self.train_ratio)
-        elif self.is_val:
+        elif self.split == "eval":
             self.start_idx = int(total_samples * self.train_ratio)
             self.end_idx = int(total_samples * (self.train_ratio + self.val_ratio))
-        else:  # test
+        elif self.split == "test":
             self.start_idx = int(total_samples * (self.train_ratio + self.val_ratio))
             self.end_idx = total_samples
-
-        # Filter samples for current split
         self.samples = self.samples[self.start_idx : self.end_idx]
 
     def _split_spectra_to_images(
@@ -287,20 +283,17 @@ class MetalloDS(Dataset):
             Dictionary containing the requested data modalities
         """
         sample = self.samples[index]
-        result = {}
-        # result["slice_id"] = sample['slice_id']
-        # result["time_point"] = sample['time_point']
-        # result["image_number"] = sample['image_number']
-        result["sample_id"] = (
-            f"{sample['slice_id']}_{sample['time_point']}_{sample['image_number']}"
-        )
+        result = {
+            # "slice_id": sample['slice_id'],
+            # "time_point": sample['time_point'],
+            # "image_number": sample['image_number'],
+            "sample_id": f"{sample['slice_id']}_{sample['time_point']}_{sample['image_number']}",
+        }
 
         if self.mode in ["image", "unified"]:
-            image = self._load_image(sample["image_path"])
-            result["image"] = image
+            result["image"] = self._load_image(sample["image_path"])
         if self.mode in ["spectral", "unified"]:
             result["spectral"] = sample["spectra"]
-
-        result["dos"] = sample["dos"]
-
+        if self.split != "test":
+            result["labels"] = sample["dos"]
         return result

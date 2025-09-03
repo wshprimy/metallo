@@ -29,44 +29,27 @@ def create_image_transforms():
 
 def create_datasets_from_config(config):
     """Create datasets based on configuration."""
-
-    # Create image transforms
     image_transform = create_image_transforms()
-
-    # Create train dataset
     train_dataset = MetalloDS(
         data_dir=config.data.data_dir,
         mode=config.data.mode,
-        is_train=True,
-        is_val=False,
-        train_ratio=config.data.split_ratios[0],
-        val_ratio=config.data.split_ratios[1],
+        split="train",
         image_transform=image_transform,
         process_images=getattr(config.data, "process_images", False),
         normalize_spectral=getattr(config.data, "normalize_spectral", True),
     )
-
-    # Create validation dataset
     eval_dataset = MetalloDS(
         data_dir=config.data.data_dir,
         mode=config.data.mode,
-        is_train=False,
-        is_val=True,
-        train_ratio=config.data.split_ratios[0],
-        val_ratio=config.data.split_ratios[1],
+        split="eval",
         image_transform=image_transform,
         process_images=getattr(config.data, "process_images", False),
         normalize_spectral=getattr(config.data, "normalize_spectral", True),
     )
-
-    # Create test dataset
     test_dataset = MetalloDS(
         data_dir=config.data.data_dir,
         mode=config.data.mode,
-        is_train=False,
-        is_val=False,
-        train_ratio=config.data.split_ratios[0],
-        val_ratio=config.data.split_ratios[1],
+        split="test",
         image_transform=image_transform,
         process_images=getattr(config.data, "process_images", False),
         normalize_spectral=getattr(config.data, "normalize_spectral", True),
