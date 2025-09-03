@@ -1,6 +1,6 @@
 mode:
-  test_only: false
-  checkpoint_path: "./output/checkpoint-1500"
+  test_only: true
+  checkpoint_path: "./output-20250903-1620/checkpoint-1050"
 
 data:
   dataset: "metallo"

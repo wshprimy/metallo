@@ -1,5 +1,7 @@
 import os
 import logging
+import numpy as np
+import pandas as pd
 import torch
 import torchvision.transforms as transforms
 from transformers import Trainer, TrainingArguments
@@ -108,13 +110,13 @@ def main():
         trainer.save_model()
 
         # Optional: Evaluate on test set
-        if len(datasets["test"]) > 0:
-            logger.info("Evaluating on test set.")
-            test_results = trainer.evaluate(eval_dataset=datasets["test"])
-            logger.info("Test Results:")
-            for metric, value in test_results.items():
-                if metric.startswith("eval_"):
-                    logger.info(f"  {metric}: {value:.6f}")
+        # if len(datasets["test"]) > 0:
+        #     logger.info("Evaluating on test set.")
+        #     test_results = trainer.evaluate(eval_dataset=datasets["test"])
+        #     logger.info("Test Results:")
+        #     for metric, value in test_results.items():
+        #         if metric.startswith("eval_"):
+        #             logger.info(f"  {metric}: {value:.6f}")
 
     else:
         logger.info("Running in test mode.")
@@ -143,13 +145,21 @@ def main():
         with torch.no_grad():
             prediction_output = trainer.predict(test_dataset=datasets["test"])
 
-            predictions = prediction_output.predictions
+            pred = prediction_output.predictions
             labels = prediction_output.label_ids
+            logger.info(f"Raw Predictions: {pred}")
+            logger.info(f"True Labels: {labels}")
 
-            logger.info("Raw Predictions:")
-            logger.info(predictions)
-            logger.info("True Labels:")
-            logger.info(labels)
+            pred = pred.flatten()
+            labels = labels.flatten()
+            abs_error = np.abs(pred - labels)
+            df = pd.DataFrame(
+                {"Prediction": pred, "Target": labels, "Absolute Error": abs_error}
+            )
+            csv_path = os.path.join(
+                "./", config.mode.checkpoint_path, "test_results.csv"
+            )
+            df.to_csv(csv_path, index=False)
 
         with torch.no_grad():
             test_results = trainer.evaluate()
