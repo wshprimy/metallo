@@ -37,12 +37,17 @@ class MetalloDS(Dataset):
         """
         Initialize unified metallography dataset.
 
+        Note: Dataset splitting is now based on slice_id:
+            - slice_id="1": Split into 95% training and 5% validation
+            - slice_id="2": All samples assigned to test set
+            - train_ratio and val_ratio parameters are ignored but kept for compatibility
+
         Args:
             data_dir: Root directory containing slice folders (e.g., '.dataset/metallography')
             mode: Dataset mode - "image", "spectral", or "unified"
             split: Dataset split - "train", "val", or "test"
-            train_ratio: Ratio for training split (default: 0.8)
-            val_ratio: Ratio for validation split (default: 0.1)
+            train_ratio: Ratio for training split (IGNORED - kept for compatibility)
+            val_ratio: Ratio for validation split (IGNORED - kept for compatibility)
             image_transform: Image transformations
             process_images: Whether to apply image preprocessing
             normalize_spectral: Whether to normalize spectral data
@@ -80,13 +85,36 @@ class MetalloDS(Dataset):
             self.image_transform = image_transform
 
         total_samples = self._discover_samples()
-        train_samples, test_samples = train_test_split(
-            total_samples,
-            test_size=1 - self.train_ratio - self.val_ratio,
+        # New slice-based splitting logic
+        # slice_id = "1": 95% train, 5% validation
+        # slice_id = "2": 100% test
+        slice_1_samples = [
+            sample for sample in total_samples if sample["slice_id"] == "1"
+        ]
+        slice_2_samples = [
+            sample for sample in total_samples if sample["slice_id"] == "2"
+        ]
+        assert (
+            slice_1_samples and slice_2_samples
+        ), "Both slice_id '1' and '2' must be present"
+
+        train_samples, eval_samples = train_test_split(
+            slice_1_samples,
+            test_size=0.05,  # 5% for validation
             random_state=random_seed,
         )
-        train_samples, eval_samples = train_test_split(
-            train_samples, test_size=self.val_ratio, random_state=random_seed
+        logging.info(
+            f"Slice 1 split: {len(train_samples)} train samples, {len(eval_samples)} validation samples"
+        )
+        test_samples = slice_2_samples
+        logging.info(f"Slice 2: {len(test_samples)} test samples")
+
+        # Log the splitting summary
+        logging.info(
+            f"Dataset split summary - Train: {len(train_samples)}, Val: {len(eval_samples)}, Test: {len(test_samples)}"
+        )
+        logging.info(
+            "Note: train_ratio and val_ratio parameters are ignored in slice-based splitting"
         )
 
         if self.split == "train":
