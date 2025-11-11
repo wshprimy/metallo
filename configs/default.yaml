@@ -1,11 +1,11 @@
 mode:
   test_only: false
-  checkpoint_path: "./output/checkpoint-1500"
+  checkpoint_path: "./output"
 
 data:
   dataset: "metallo"
   mode: "unified"
-  data_dir: "/ramdisk/.dataset/metallography"
+  data_dir: ".dataset/metallography"
   process_images: false  # Whether to apply image preprocessing
   normalize_spectral: true  # Whether to normalize spectral data
 
