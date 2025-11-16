@@ -89,10 +89,10 @@ class MetalloDS(Dataset):
         # slice_id = "1": 95% train, 5% validation
         # slice_id = "2": 100% test
         slice_1_samples = [
-            sample for sample in total_samples if sample["slice_id"] == "1"
+            sample for sample in total_samples if sample["slice_id"] in ["1", "2"]
         ]
         slice_2_samples = [
-            sample for sample in total_samples if sample["slice_id"] == "2"
+            sample for sample in total_samples if sample["slice_id"] == "3"
         ]
         assert (
             slice_1_samples and slice_2_samples
