@@ -107,7 +107,14 @@ class ShallowFusionModule(nn.Module):
     Enables spatial correspondence learning between metallographic and spectral features.
     """
 
-    def __init__(self, img_channels=512, spec_channels=128, hidden_dim=128, num_heads=4, dropout=0.1):
+    def __init__(
+        self,
+        img_channels=512,
+        spec_channels=128,
+        hidden_dim=128,
+        num_heads=4,
+        dropout=0.1,
+    ):
         super().__init__()
         self.hidden_dim = hidden_dim
 
@@ -139,8 +146,13 @@ class ShallowFusionModule(nn.Module):
             spec_enhanced: [B, hidden_dim, H_spec, W_spec]
         """
         # Bidirectional cross-attention
-        img_enhanced = self.img_to_spec_attn(img_feat, spec_feat)  # [B, D, H_img, W_img]
-        spec_enhanced = self.spec_to_img_attn(spec_feat, img_feat)  # [B, D, H_spec, W_spec]
+        print("img_feat shape:", img_feat.shape, " spec_feat shape:", spec_feat.shape)
+        img_enhanced = self.img_to_spec_attn(
+            img_feat, spec_feat
+        )  # [B, D, H_img, W_img]
+        spec_enhanced = self.spec_to_img_attn(
+            spec_feat, img_feat
+        )  # [B, D, H_spec, W_spec]
 
         return img_enhanced, spec_enhanced
 
@@ -224,7 +236,7 @@ class ProgressiveMultiLevelFusion(nn.Module):
         # Shallow fusion: feature-level cross-attention
         self.shallow_fusion = ShallowFusionModule(
             img_channels=512,  # ResNet18 output channels before final pooling
-            spec_channels=128,  # SpectralEncoder output channels
+            spec_channels=config.hidden_dim,  # SpectralEncoder output channels
             hidden_dim=config.hidden_dim,
             num_heads=4,
             dropout=config.dropout,
@@ -324,15 +336,16 @@ class MetalloNet(PreTrainedModel):
     config_class = MetalloNetConfig
 
     def __init__(self, config, **kwargs):
-        super().__init__(MetalloNetConfig(**kwargs))
+        super().__init__(config)
         self.config = config
         assert (
             self.config.mode == "unified"
         ), "Currently only 'unified' mode is supported."
+        self.use_progressive_fusion = self.config.fusion_type == "progressive"
 
         self.image_encoder = self._build_image_encoder()
         self.spectral_encoder = SpectralEncoder(self.config)
-        
+
         # Choose fusion module based on config
         if self.config.fusion_type == "progressive":
             self.fusion = ProgressiveMultiLevelFusion(self.config)
@@ -343,6 +356,7 @@ class MetalloNet(PreTrainedModel):
 
     def _build_image_encoder(self):
         """Build image feature extractor."""
+
         if self.config.image_backbone == "resnet18":
             backbone = models.resnet18(pretrained=True)
             backbone_output_dim = 512
@@ -355,20 +369,31 @@ class MetalloNet(PreTrainedModel):
         # For progressive fusion, we need features before final pooling
         if self.use_progressive_fusion:
             # Remove avgpool and fc layers to get spatial features
-            backbone.avgpool = nn.Identity()
-            backbone.fc = nn.Identity()
+            encoder = nn.Sequential(
+                backbone.conv1,
+                backbone.bn1,
+                backbone.relu,
+                backbone.maxpool,
+                backbone.layer1,
+                backbone.layer2,
+                backbone.layer3,
+                backbone.layer4,
+            )
+            return encoder
+
         else:
             # Legacy: keep pooling, replace fc
+            in_dim = backbone_output_dim
             backbone.fc = nn.Sequential(
                 nn.Dropout(self.config.dropout),
-                nn.Linear(backbone_output_dim, self.config.hidden_dim),
+                nn.Linear(in_dim, self.config.hidden_dim),
             )
         return backbone
 
     def forward(self, image, spectral, labels=None, **inputs):
         """
         Forward pass with support for both fusion types.
-        
+
         Returns:
             dict with keys:
                 - loss: total loss (MSE + optional auxiliary loss)
@@ -379,14 +404,20 @@ class MetalloNet(PreTrainedModel):
             # Get spatial features (before pooling)
             img_feat = self.image_encoder(image)  # [B, 512, 7, 7]
             spec_feat_spatial = self.spectral_encoder.spectral_compress(
-                spectral.view(spectral.size(0), 6, 4, self.config.spectral_dim).permute(0, 3, 1, 2)
+                spectral.view(spectral.size(0), 6, 4, self.config.spectral_dim).permute(
+                    0, 3, 1, 2
+                )
             )  # [B, 400, 6, 4]
-            spec_feat_spatial = self.spectral_encoder.feature_extract(spec_feat_spatial)  # [B, 128, 6, 4]
-            spec_feat_spatial = self.spectral_encoder.spatial_module(spec_feat_spatial)  # [B, 128, 6, 4]
-            
+            spec_feat_spatial = self.spectral_encoder.feature_extract(
+                spec_feat_spatial
+            )  # [B, 128, 6, 4]
+            spec_feat_spatial = self.spectral_encoder.spatial_module(
+                spec_feat_spatial
+            )  # [B, 128, 6, 4]
+
             # Progressive fusion
             pred, aux_loss, gate_weights = self.fusion(img_feat, spec_feat_spatial)
-            
+
             # Compute total loss
             loss = None
             if labels is not None:
@@ -395,7 +426,7 @@ class MetalloNet(PreTrainedModel):
                 loss_fn = nn.MSELoss()
                 mse_loss = loss_fn(pred, labels)
                 loss = mse_loss + aux_loss
-            
+
             return {
                 "loss": loss,
                 "pred": pred,

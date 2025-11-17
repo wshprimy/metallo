@@ -152,6 +152,8 @@ def main():
             logger.info(f"Raw Predictions: {pred}")
             logger.info(f"True Labels: {labels}")
 
+            if isinstance(pred, (tuple, list)):
+                pred = pred[0]
             pred = pred.flatten()
             labels = labels.flatten()
             abs_error = np.abs(pred - labels)
