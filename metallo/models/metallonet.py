@@ -201,6 +201,8 @@ class DeepFusionModule(nn.Module):
             fused: [B, hidden_dim] - fused features
             gate_weights: [B, 2] - [w_img, w_spec] for interpretability
         """
+        # --- ⭐ 让光谱成为辅助（抑制其梯度）---
+        spec_vec = 0.1 * spec_vec + 0.9 * spec_vec.detach()
         # Add sequence dimension for attention: [B, D] -> [B, 1, D]
         img_seq = img_vec.unsqueeze(1)
         spec_seq = spec_vec.unsqueeze(1)
@@ -215,12 +217,16 @@ class DeepFusionModule(nn.Module):
         # Weighted fusion
         w_img = gate_weights[:, 0:1]  # [B, 1]
         w_spec = gate_weights[:, 1:2]  # [B, 1]
+        # --- ⭐ 强制 w_img > w_spec（dominance 结构先验）---
+        margin = 0.2
+        dominance_loss = torch.clamp(margin - (w_img - w_spec), min=0).mean()
+        # 加权融合
         fused = w_img * img_attended + w_spec * spec_attended  # [B, hidden_dim]
 
         # Layer normalization
         fused = self.layer_norm(fused)
 
-        return fused, gate_weights
+        return fused, gate_weights, dominance_loss
 
 
 class ProgressiveMultiLevelFusion(nn.Module):
@@ -285,7 +291,7 @@ class ProgressiveMultiLevelFusion(nn.Module):
         spec_vec = self.spec_pool(spec_enhanced).flatten(1)  # [B, hidden_dim]
 
         # Deep fusion: co-attention + gating
-        fused, gate_weights = self.deep_fusion(img_vec, spec_vec)
+        fused, gate_weights, dominance_loss = self.deep_fusion(img_vec, spec_vec)
         # fused: [B, hidden_dim]
         # gate_weights: [B, 2] where [:, 0] is w_img, [:, 1] is w_spec
 
@@ -297,7 +303,7 @@ class ProgressiveMultiLevelFusion(nn.Module):
         # We want w_img > w_spec, so we penalize when w_img is small
         aux_loss = -torch.log(gate_weights[:, 0] + 1e-8).mean() * self.aux_loss_weight
 
-        return pred, aux_loss, gate_weights
+        return pred, aux_loss, gate_weights, dominance_loss
 
 
 class MetallographicDominantTransformerFusion(nn.Module):
@@ -416,7 +422,9 @@ class MetalloNet(PreTrainedModel):
             )  # [B, 128, 6, 4]
 
             # Progressive fusion
-            pred, aux_loss, gate_weights = self.fusion(img_feat, spec_feat_spatial)
+            pred, aux_loss, gate_weights, dominance_loss = self.fusion(
+                img_feat, spec_feat_spatial
+            )
 
             # Compute total loss
             loss = None
@@ -425,13 +433,14 @@ class MetalloNet(PreTrainedModel):
                     labels = labels.unsqueeze(-1)
                 loss_fn = nn.MSELoss()
                 mse_loss = loss_fn(pred, labels)
-                loss = mse_loss + aux_loss
+                loss = mse_loss + aux_loss + 10 * dominance_loss
 
             return {
                 "loss": loss,
                 "pred": pred,
                 "gate_weights": gate_weights,
                 "aux_loss": aux_loss,
+                "dominance_loss": dominance_loss,
             }
         else:
             # Legacy fusion
